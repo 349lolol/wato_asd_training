@@ -19,6 +19,12 @@ class CostmapNode : public rclcpp::Node {
   private:
     void initializeMap();
 
+    void convertToGrid(double range, double angle, int& x_grid, int& y_grid);
+    void markObstacle(int x_grid, int y_grid);
+    void inflateObstacles();
+    void publishCostmap();
+    bool isValidGridCell(int x, int y);
+
 
     robot::CostmapCore costmap_;
   
@@ -32,6 +38,11 @@ class CostmapNode : public rclcpp::Node {
     double resolution_;
     int width_;
     int height_;
+
+    double inflation_radius_;
+    int max_cost_;
+    rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_pub_;
+    std::vector<std::pair<int, int>> obstacle_cells_;
 };
  
 #endif 
