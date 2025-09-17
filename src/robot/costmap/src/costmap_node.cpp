@@ -5,6 +5,10 @@
  
 CostmapNode::CostmapNode() : Node("costmap"), costmap_(robot::CostmapCore(this->get_logger())) {
   // Initialize the constructs and their parameters
+  this->declare_parameter("resolution", 0.1); //10cm
+  this->declare_parameter("width", 100); //10 meters, 100 dots
+  this->declare_parameter("height", 100); //10 meters, 100 dots
+
   string_pub_ = this->create_publisher<std_msgs::msg::String>("/test_topic", 10);
   timer_ = this->create_wall_timer(std::chrono::milliseconds(500), std::bind(&CostmapNode::publishMessage, this));
 
@@ -12,6 +16,26 @@ CostmapNode::CostmapNode() : Node("costmap"), costmap_(robot::CostmapCore(this->
         "/lidar",  // topic name from gazebo bridge
         10,        // QoS depth
         std::bind(&CostmapNode::lidarCallback, this, std::placeholders::_1));
+
+  initializeMap();
+}
+
+void CostmapNode::initializeMap() {
+  costmap_msg_.header.frame_id = "map";
+  costmap_msg_.info.resolution = resolution_;
+  costmap_msg_.info.width = width_;
+  costmap_msg_.info.height = height_;
+
+  costmap_msg_.info.origin.position.x = -width_ * resolution_ / 2.0;
+  costmap_msg_.info.origin.position.y = -height_ * resolution_ / 2.0;
+  costmap_msg_.info.origin.position.z = 0.0;
+
+  costmap_msg_.info.origin.orientation.x = 0.0;
+  costmap_msg_.info.origin.orientation.y = 0.0;
+  costmap_msg_.info.origin.orientation.z = 0.0;
+  costmap_msg_.info.origin.orientation.w = 1.0;
+
+  costmap_msg_.data.resize(width_ * height_, -1);
 }
 
 void CostmapNode::lidarCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
