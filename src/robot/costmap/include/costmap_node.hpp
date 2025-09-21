@@ -14,6 +14,8 @@
 // ROS2 Core
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/time.hpp"
+#include "std_msgs/msg/string.hpp"
+
 
 // ROS2 Messages
 #include "sensor_msgs/msg/laser_scan.hpp"
@@ -25,6 +27,8 @@
 class CostmapNode : public rclcpp::Node {
 public:
     CostmapNode();
+
+    void publishMessage();
 
 private:
     // Constants
@@ -46,6 +50,8 @@ private:
 
     // Member variables
     robot::CostmapCore costmap_;
+    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr string_pub_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_sub_;
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_pub_;
 };

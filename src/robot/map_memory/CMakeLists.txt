@@ -16,6 +16,7 @@ find_package(rclcpp REQUIRED)      # ROS2 C++ package
 find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)    # YOU ARE ONLY ADDING THIS TO THE FILE
 
 # Compiles source files into a library
 # A library is not executed, instead other executables can link
@@ -33,6 +34,7 @@ ament_target_dependencies(map_memory_lib
   nav_msgs
   tf2
   geometry_msgs
+  std_msgs
 )
 
 # Create ROS2 node executable from source files

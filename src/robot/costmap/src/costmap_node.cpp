@@ -9,6 +9,9 @@ CostmapNode::CostmapNode() : Node("costmap"), costmap_(robot::CostmapCore(this->
     this->declare_parameter("width", WIDTH);
     this->declare_parameter("height", HEIGHT);
 
+    string_pub_ = this->create_publisher<std_msgs::msg::String>("/test_topic", 10);
+    timer_ = this->create_wall_timer(std::chrono::milliseconds(500), std::bind(&CostmapNode::publishMessage, this));
+
     // Create the costmap publisher
     costmap_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/costmap", 10);
 
@@ -18,6 +21,14 @@ CostmapNode::CostmapNode() : Node("costmap"), costmap_(robot::CostmapCore(this->
         10,
         std::bind(&CostmapNode::lidarCallback, this, std::placeholders::_1));
 }
+
+void CostmapNode::publishMessage() {
+  auto message = std_msgs::msg::String();
+  message.data = "Hello, ROS 2!";
+  RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message.data.c_str());
+  string_pub_->publish(message);
+}
+ 
 
 
 void CostmapNode::convertToGrid(double x, double y, int& x_grid, int& y_grid) const {

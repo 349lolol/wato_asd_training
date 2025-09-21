@@ -1,6 +1,115 @@
 #include "map_memory_node.hpp"
 
-MapMemoryNode::MapMemoryNode() : Node("map_memory"), map_memory_(robot::MapMemoryCore(this->get_logger())) {}
+#include "tf2/LinearMath/Quaternion.h"
+#include "tf2/LinearMath/Matrix3x3.h"
+#include <cmath>
+
+MapMemoryNode::MapMemoryNode() : Node("map_memory"), map_memory_(robot::MapMemoryCore(this->get_logger())) {
+  costmap_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
+      "/costmap", 10, std::bind(&MapMemoryNode::costmapCallback, this, std::placeholders::_1));
+  odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+      "/odom/filtered", 10, std::bind(&MapMemoryNode::odomCallback, this, std::placeholders::_1));
+  map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map", 10);
+  timer_ = this->create_wall_timer(std::chrono::milliseconds(MAP_PUB_RATE), std::bind(&MapMemoryNode::timerCallback, this));
+
+  global_map_.header.stamp = this->now();
+  global_map_.header.frame_id = "sim_world";
+
+  robot_x_ = 0.0;
+  robot_y_ = 0.0;
+  theta_ = 0.0;
+  prev_x_ = 0.0;
+  prev_y_ = 0.0;
+
+  global_map_.info.resolution = MAP_RES;
+  global_map_.info.width = MAP_WIDTH;
+  global_map_.info.height = MAP_HEIGHT;
+  global_map_.info.origin.position.x = MAP_ORIGIN_X;
+  global_map_.info.origin.position.y = MAP_ORIGIN_Y;
+  global_map_.data.resize(MAP_WIDTH * MAP_HEIGHT, 0);
+
+  updateMap();
+  map_pub_->publish(global_map_);
+}
+
+void MapMemoryNode::costmapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) {
+  latest_costmap_ = *msg;
+  costmap_updated_ = true;
+}
+
+void MapMemoryNode::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
+  robot_x_ = msg->pose.pose.position.x;
+  robot_y_ = msg->pose.pose.position.y;
+
+  tf2::Quaternion q(
+      msg->pose.pose.orientation.x,
+      msg->pose.pose.orientation.y,
+      msg->pose.pose.orientation.z,
+      msg->pose.pose.orientation.w);
+  tf2::Matrix3x3 m(q);
+  double roll, pitch;
+  m.getRPY(roll, pitch, theta_);
+
+  double dist_moved = std::hypot(robot_x_ - prev_x_, robot_y_ - prev_y_);
+  if (dist_moved >= DIST_UPDATE) {
+    update_map_ = true;
+    prev_x_ = robot_x_;
+    prev_y_ = robot_y_;
+  }
+}
+
+void MapMemoryNode::mapCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
+  // Not used in this implementation
+}
+
+void MapMemoryNode::timerCallback() {
+  if (costmap_updated_ && update_map_) {
+    updateMap();
+    global_map_.header.stamp = this->now();
+    global_map_.header.frame_id = "sim_world";
+    map_pub_->publish(global_map_);
+    costmap_updated_ = false;
+    update_map_ = false;
+  }
+}
+
+void MapMemoryNode::updateMap() {
+  if (latest_costmap_.data.empty()) {
+    RCLCPP_WARN(this->get_logger(), "Latest costmap is empty, cannot update map.");
+    return;
+  }
+  if (std::isnan(robot_x_) || std::isnan(robot_y_)) return;
+
+  double l_res = latest_costmap_.info.resolution;
+  int l_width = latest_costmap_.info.width;
+  int l_height = latest_costmap_.info.height;
+  auto& l_data = latest_costmap_.data;
+
+  double g_res = global_map_.info.resolution;
+  double g_origin_x = global_map_.info.origin.position.x;
+  double g_origin_y = global_map_.info.origin.position.y;
+  int g_width = global_map_.info.width;
+  int g_height = global_map_.info.height;
+  auto& g_data = global_map_.data;
+
+  for(int y = 0; y < l_height; ++y) {
+    for(int x = 0; x < l_width; ++x) {
+      double l_x = (x - l_width / 2) * l_res;
+      double l_y = (y - l_height / 2) * l_res;
+
+      double g_x = robot_x_ + (l_x * std::cos(theta_) - l_y * std::sin(theta_));
+      double g_y = robot_y_ + (l_x * std::sin(theta_) + l_y * std::cos(theta_));
+
+      int idx_g_x = static_cast<int>(std::round(g_x / g_res + g_width / 2));
+      int idx_g_y = static_cast<int>(std::round(g_y / g_res + g_height / 2));
+
+      if (idx_g_x < 0 || idx_g_x >= g_width || idx_g_y < 0 || idx_g_y >= g_height) continue;
+
+      int8_t& g_cost = g_data[idx_g_y * g_width + idx_g_x];
+      g_cost = std::max(g_cost, l_data[y * l_width + x]);
+    }
+  }
+}
 
 int main(int argc, char ** argv)
 {
