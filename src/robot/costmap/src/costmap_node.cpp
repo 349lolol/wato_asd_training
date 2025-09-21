@@ -3,7 +3,6 @@
 CostmapNode::CostmapNode() : Node("costmap"), costmap_(robot::CostmapCore(this->get_logger())) {
     // Declare parameters with default values matching our constants
     this->declare_parameter("inflation_radius", INFLATION_RADIUS);
-    this->declare_parameter("obstacle_threshold", OBSTACLE_THRESHOLD);
     this->declare_parameter("max_cost", MAX_COST);
     this->declare_parameter("resolution", RESOLUTION);
     this->declare_parameter("width", WIDTH);
@@ -32,10 +31,13 @@ void CostmapNode::publishMessage() {
 
 
 void CostmapNode::convertToGrid(double x, double y, int& x_grid, int& y_grid) const {
-    x_grid = static_cast<int>(x / RESOLUTION + WIDTH / 2);
-    y_grid = static_cast<int>(y / RESOLUTION + HEIGHT / 2);
+    // Convert from world coordinates to grid coordinates using the map center as origin
+    double origin_x = -(WIDTH * RESOLUTION) / 2.0;
+    double origin_y = -(HEIGHT * RESOLUTION) / 2.0;
+    
+    x_grid = static_cast<int>((x - origin_x) / RESOLUTION);
+    y_grid = static_cast<int>((y - origin_y) / RESOLUTION);
 }
-
 bool CostmapNode::isValidGridCell(int x, int y) const {
     return (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT);
 }
@@ -80,11 +82,8 @@ void CostmapNode::lidarCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg
         convertToGrid(x, y, x_grid, y_grid);
         
         if (!isValidGridCell(x_grid, y_grid)) continue;
-
-        if (msg->ranges[i] < OBSTACLE_THRESHOLD) {
-            markObstacle(costmap, x_grid, y_grid);
-            inflateObstacles(costmap, x_grid, y_grid);
-        }
+          markObstacle(costmap, x_grid, y_grid);
+          inflateObstacles(costmap, x_grid, y_grid);
     }
 
     publishCostmap(costmap, msg->header);
@@ -94,16 +93,22 @@ void CostmapNode::publishCostmap(const std::vector<std::vector<int8_t>>& costmap
                                 const std_msgs::msg::Header& header) {
     nav_msgs::msg::OccupancyGrid occupancy_grid;
     occupancy_grid.header = header;
+    occupancy_grid.header.frame_id = "map"; // Change this to "map" instead of the sensor frame
     occupancy_grid.info.resolution = RESOLUTION;
     occupancy_grid.info.width = WIDTH;
     occupancy_grid.info.height = HEIGHT;
-    occupancy_grid.info.origin.position.x = -15;
-    occupancy_grid.info.origin.position.y = -15;
+    
+    // Set the origin to be centered on the map
+    occupancy_grid.info.origin.position.x = -(WIDTH * RESOLUTION) / 2.0;
+    occupancy_grid.info.origin.position.y = -(HEIGHT * RESOLUTION) / 2.0;
+    occupancy_grid.info.origin.orientation.w = 1.0;
+    
     occupancy_grid.data.resize(WIDTH * HEIGHT);
 
-    for (int i = 0; i < HEIGHT; i++) {
-        for (int j = 0; j < WIDTH; j++) {
-            occupancy_grid.data[j * WIDTH + i] = costmap[j][i];
+    // Correct the data assignment (note the index calculation)
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
+            occupancy_grid.data[y * WIDTH + x] = costmap[x][y];
         }
     }
 

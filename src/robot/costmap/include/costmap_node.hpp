@@ -35,7 +35,6 @@ private:
     static constexpr int WIDTH = 300;
     static constexpr int HEIGHT = 300;
     static constexpr double RESOLUTION = 0.1;
-    static constexpr double OBSTACLE_THRESHOLD = 1.0;
     static constexpr int8_t MAX_COST = 100;
     static constexpr double INFLATION_RADIUS = 1.0;
 

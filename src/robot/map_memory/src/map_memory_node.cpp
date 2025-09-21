@@ -12,9 +12,8 @@ MapMemoryNode::MapMemoryNode() : Node("map_memory"), map_memory_(robot::MapMemor
   map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map", 10);
   timer_ = this->create_wall_timer(std::chrono::milliseconds(MAP_PUB_RATE), std::bind(&MapMemoryNode::timerCallback, this));
 
-  global_map_.header.stamp = this->now();
   global_map_.header.frame_id = "sim_world";
-
+  
   robot_x_ = 0.0;
   robot_y_ = 0.0;
   theta_ = 0.0;
@@ -24,12 +23,9 @@ MapMemoryNode::MapMemoryNode() : Node("map_memory"), map_memory_(robot::MapMemor
   global_map_.info.resolution = MAP_RES;
   global_map_.info.width = MAP_WIDTH;
   global_map_.info.height = MAP_HEIGHT;
-  global_map_.info.origin.position.x = MAP_ORIGIN_X;
-  global_map_.info.origin.position.y = MAP_ORIGIN_Y;
-  global_map_.data.resize(MAP_WIDTH * MAP_HEIGHT, 0);
-
-  updateMap();
-  map_pub_->publish(global_map_);
+  global_map_.info.origin.position.x = -MAP_WIDTH * MAP_RES / 2.0;
+  global_map_.info.origin.position.y = -MAP_HEIGHT * MAP_RES / 2.0;
+  global_map_.data.assign(MAP_WIDTH * MAP_HEIGHT, 0);
 }
 
 void MapMemoryNode::costmapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) {
@@ -38,24 +34,23 @@ void MapMemoryNode::costmapCallback(const nav_msgs::msg::OccupancyGrid::SharedPt
 }
 
 void MapMemoryNode::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
-  robot_x_ = msg->pose.pose.position.x;
-  robot_y_ = msg->pose.pose.position.y;
+  double curr_x = msg->pose.pose.position.x;
+  double curr_y = msg->pose.pose.position.y;
 
-  tf2::Quaternion q(
-      msg->pose.pose.orientation.x,
-      msg->pose.pose.orientation.y,
-      msg->pose.pose.orientation.z,
-      msg->pose.pose.orientation.w);
+  double dist = std::hypot(curr_x - prev_x_, curr_y - prev_y_);
+  if (dist < DIST_UPDATE) return;
+
+  robot_x_ = curr_x;
+  robot_y_ = curr_y;
+
+  auto q_msg = msg->pose.pose.orientation;
+  tf2::Quaternion q(q_msg.x, q_msg.y, q_msg.z, q_msg.w);
   tf2::Matrix3x3 m(q);
-  double roll, pitch;
-  m.getRPY(roll, pitch, theta_);
+  double roll, pitch, yaw;
+  m.getRPY(roll, pitch, yaw);
+  theta_ = yaw;
 
-  double dist_moved = std::hypot(robot_x_ - prev_x_, robot_y_ - prev_y_);
-  if (dist_moved >= DIST_UPDATE) {
-    update_map_ = true;
-    prev_x_ = robot_x_;
-    prev_y_ = robot_y_;
-  }
+  update_map_ = true;
 }
 
 void MapMemoryNode::mapCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
@@ -74,10 +69,6 @@ void MapMemoryNode::timerCallback() {
 }
 
 void MapMemoryNode::updateMap() {
-  if (latest_costmap_.data.empty()) {
-    RCLCPP_WARN(this->get_logger(), "Latest costmap is empty, cannot update map.");
-    return;
-  }
   if (std::isnan(robot_x_) || std::isnan(robot_y_)) return;
 
   double l_res = latest_costmap_.info.resolution;
