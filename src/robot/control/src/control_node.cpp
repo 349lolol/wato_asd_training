@@ -2,6 +2,9 @@
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2/LinearMath/Matrix3x3.h"
 #include <cmath>
+#include <optional>
+#include <algorithm>
+
 
 ControlNode::ControlNode(): Node("control"), control_(robot::ControlCore(this->get_logger())) {
   path_sub_ = this->create_subscription<nav_msgs::msg::Path>(
@@ -24,6 +27,16 @@ double ControlNode::extractYawFromQuaternion(const geometry_msgs::msg::Quaternio
   return yaw;
 }
 
+std::optional<geometry_msgs::msg::PoseStamped> ControlNode::getLookaheadPoint() {
+  for(auto& pose : current_path_->poses) {
+    double distance = computeDistance(current_odom_->pose.pose.position, pose.pose.position);
+    if (distance >= LOOKAHEAD_DISTANCE) {
+      return pose;
+    }
+  }
+  return std::nullopt;
+}
+
 void ControlNode::controlLoop() {
   if (!current_path_ || !current_odom_) {
     RCLCPP_WARN(this->get_logger(), "No path and odometry found. waiting ...");
@@ -40,7 +53,7 @@ void ControlNode::controlLoop() {
   // Compute control commands here
   auto lookahead_point_opt = getLookaheadPoint();
   if (!lookahead_point_opt.has_value()) {
-    if (distance < lookahead_distance_) {
+    if (distance < LOOKAHEAD_DISTANCE) {
       lookahead_point_opt = current_path_->poses.back();
     }
     else {
@@ -49,9 +62,27 @@ void ControlNode::controlLoop() {
       return;
     }
   }
+
+  auto cmd = computeVel(lookahead_point_opt.value());
+  cmd_pub_->publish(cmd);
 }
 
+geometry_msgs::msg::Twist ControlNode::computeVel(const geometry_msgs::msg::PoseStamped& target) {
+  double yaw = extractYawFromQuaternion(current_odom_->pose.pose.orientation);
+  double dx = target.pose.position.x - current_odom_->pose.pose.position.x;
+  double dy = target.pose.position.y - current_odom_->pose.pose.position.y;
+  double target_angle = std::atan2(dy, dx);
+  double angle_error = target_angle - yaw;
+  // Normalize angle error to [-pi, pi]
+  while (angle_error > M_PI) angle_error -= 2 * M_PI;
+  while (angle_error < -M_PI) angle_error += 2 * M_PI;
 
+  double distance = computeDistance(current_odom_->pose.pose.position, target.pose.position);
+  geometry_msgs::msg::Twist cmd;
+  cmd.linear.x = std::min(LINEAR_VELOCITY, 1.5 * distance);
+  cmd.angular.z = distance > 0.5 ? 1.5 * angle_error : 0.0; // Reduce angular velocity when close to target
+  return cmd;
+}
 
 int main(int argc, char ** argv)
 {
