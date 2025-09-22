@@ -35,7 +35,7 @@ class ControlNode : public rclcpp::Node {
 
     static constexpr double LOOKAHEAD_DISTANCE = 0.6; // meters
     static constexpr double TOLERANCE = 0.1;
-    static constexpr double LINEAR_VELOCITY = 0.5;
+    static constexpr double LINEAR_VELOCITY = 1.5;
     static constexpr int dt_ms = 100; // Control loop interval in milliseconds
 
     void controlLoop();
