@@ -1,5 +1,7 @@
 # WATonomous ASD Admissions Assignment
 
+Costmap + Memorymap implemeted seperately [https://github.com/vin-jl/wato_asd_training](url)
+
 ## Prerequisite Installation
 These steps are to setup the monorepo to work on your own PC. We utilize docker to enable ease of reproducibility and deployability.
 
