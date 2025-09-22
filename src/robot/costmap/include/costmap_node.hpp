@@ -36,7 +36,7 @@ private:
     static constexpr int HEIGHT = 300;
     static constexpr double RESOLUTION = 0.1;
     static constexpr int8_t MAX_COST = 100;
-    static constexpr double INFLATION_RADIUS = 0.2;
+    static constexpr double INFLATION_RADIUS = 1.0;
 
     // Member functions
     void lidarCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);

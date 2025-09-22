@@ -47,12 +47,6 @@ void CostmapNode::markObstacle(std::vector<std::vector<int8_t>>& costmap, int x_
     
     // Ensure we're marking the actual cell where the obstacle was detected
     costmap[x_grid][y_grid] = MAX_COST;
-    
-    // Optional: Mark adjacent cells to ensure better surface contact
-    if (isValidGridCell(x_grid, y_grid-1)) costmap[x_grid][y_grid-1] = MAX_COST;
-    if (isValidGridCell(x_grid, y_grid+1)) costmap[x_grid][y_grid+1] = MAX_COST;
-    if (isValidGridCell(x_grid-1, y_grid)) costmap[x_grid-1][y_grid] = MAX_COST;
-    if (isValidGridCell(x_grid+1, y_grid)) costmap[x_grid+1][y_grid] = MAX_COST;
 }
 
 void CostmapNode::inflateObstacles(std::vector<std::vector<int8_t>>& costmap, int x_grid, int y_grid) const {
