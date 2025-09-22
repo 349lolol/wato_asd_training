@@ -24,6 +24,35 @@ double ControlNode::extractYawFromQuaternion(const geometry_msgs::msg::Quaternio
   return yaw;
 }
 
+void ControlNode::controlLoop() {
+  if (!current_path_ || !current_odom_) {
+    RCLCPP_WARN(this->get_logger(), "No path and odometry found. waiting ...");
+    return;
+  }
+
+  double distance = computeDistance(current_odom_->pose.pose.position, current_path_->poses.back().pose.position);
+  if (distance < TOLERANCE) {
+    RCLCPP_INFO(this->get_logger(), "Goal reached. Stopping the robot.");
+    cmd_pub_->publish(geometry_msgs::msg::Twist());
+    return;
+  }
+
+  // Compute control commands here
+  auto lookahead_point_opt = getLookaheadPoint();
+  if (!lookahead_point_opt.has_value()) {
+    if (distance < lookahead_distance_) {
+      lookahead_point_opt = current_path_->poses.back();
+    }
+    else {
+      RCLCPP_WARN(this->get_logger(), "No lookahead point found. Stopping the robot.");
+      cmd_pub_->publish(geometry_msgs::msg::Twist());
+      return;
+    }
+  }
+}
+
+
+
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
